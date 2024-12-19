@@ -1,111 +1,3 @@
--- Создание базы данных
-CREATE DATABASE music_db;
-
--- Создание схемы
-CREATE SCHEMA music;
-
--- Создание таблиц в схеме music
-CREATE TABLE music.genre (
-  id SERIAL PRIMARY KEY,
-  title VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE music.artist (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE music.album (
-  id SERIAL PRIMARY KEY,
-  title VARCHAR(255) NOT NULL,
-  year INT CHECK (year > 0)
-);
-
-CREATE TABLE music.track (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  album_id INT REFERENCES music.album(id),
-  duration INT
-);
-
-CREATE TABLE music.collection (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  issue_year INT CHECK (issue_year > 0)
-);
-
-CREATE TABLE music.genre_to_artist (
-  genre_id INT REFERENCES music.genre(id),
-  artist_id INT REFERENCES music.artist(id)
-);
-
-CREATE TABLE music.artist_to_album (
-  artist_id INT REFERENCES music.artist(id),
-  album_id INT REFERENCES music.album(id)
-);
-
-CREATE TABLE music.track_to_collection (
-  track_id INT REFERENCES music.track(id),
-  collection_id INT REFERENCES music.collection(id)
-);
-
--- Заполнение таблицы жанров
-INSERT INTO music.genre (title) VALUES
-('Pop'),
-('Rock'),
-('Hip-Hop');
-
--- Заполнение таблицы исполнителей
-INSERT INTO music.artist (name) VALUES
-('Artist One'),
-('Artist Two'),
-('Artist Three'),
-('Artist');
-
--- Заполнение таблицы альбомов
-INSERT INTO music.album (title, year) VALUES
-('Album One', 2019),
-('Album Two', 2020),
-('Album Three', 2018);
-
--- Заполнение таблицы треков, с длительностью в секундах
-INSERT INTO music.track (name, album_id, duration) VALUES
-('Track One', 1, 210),
-('My best track', 1, 240),
-('Track Three', 2, 180),
-('Track Four', 2, 300),
-('Мой самый душевный трек', 3, 150),
-('Track Six', 3, 420); 
-
--- Заполнение таблицы сборников
-INSERT INTO music.collection (name, issue_year) VALUES
-('Collection One', 2019),
-('Collection Two', 2020),
-('Collection Three', 2018),
-('Collection Four', 2021);
-
--- Связывание исполнителей с жанрами
-INSERT INTO music.genre_to_artist (genre_id, artist_id) VALUES
-(1, 1),
-(1, 2),
-(2, 3),
-(3, 4);
-
--- Связывание исполнителей с альбомами
-INSERT INTO music.artist_to_album (artist_id, album_id) VALUES
-(1, 1),
-(2, 2),
-(3, 3),
-(4, 1);
-
--- Связывание треков со сборниками
-INSERT INTO music.track_to_collection (track_id, collection_id) VALUES
-(1, 1),
-(2, 2),
-(3, 3),
-(4, 4),
-(5, 1),
-(6, 2);
 
 -- 1. Название и продолжительность самого длительного трека
 SELECT name, duration 
@@ -131,7 +23,7 @@ WHERE name NOT LIKE '% %';
 -- 5. Название треков, которые содержат слово «мой» или «my»
 SELECT name 
 FROM music.track 
-WHERE name ILIKE '%мой%' OR name ILIKE '%my%';
+WHERE string_to_array(lower(name), ' ') && ARRAY['мой', 'my'];
 
 -- 1. Количество исполнителей в каждом жанре
 SELECT g.title, COUNT(ga.artist_id) AS artist_count
@@ -154,9 +46,12 @@ GROUP BY a.title;
 -- 4. Все исполнители, которые не выпустили альбомы в 2020 году
 SELECT DISTINCT ar.name
 FROM music.artist ar
-LEFT JOIN music.artist_to_album aa ON ar.id = aa.artist_id
-LEFT JOIN music.album al ON aa.album_id = al.id AND al.year = 2020
-WHERE al.id IS NULL;
+WHERE ar.id NOT IN (
+    SELECT aa.artist_id
+    FROM music.artist_to_album aa
+    JOIN music.album al ON aa.album_id = al.id
+    WHERE al.year = 2020
+);
 
 -- 5. Названия сборников, в которых присутствует конкретный исполнитель (например, Artist One)
 SELECT DISTINCT c.name
@@ -172,8 +67,8 @@ SELECT a.title
 FROM music.album a
 JOIN music.artist_to_album aa ON a.id = aa.album_id
 JOIN music.genre_to_artist ga ON aa.artist_id = ga.artist_id
-GROUP BY a.title
-HAVING COUNT(DISTINCT ga.genre_id) > 1;
+GROUP BY a.id, aa.artist_id  -- Группируем по ID альбома и ID исполнителя
+HAVING COUNT(DISTINCT ga.genre_id) > 1
 
 -- 2. Наименования треков, которые не входят в сборники
 SELECT t.name
